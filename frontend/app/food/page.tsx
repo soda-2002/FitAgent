@@ -70,11 +70,14 @@ export default function FoodPage() {
       const formData = new FormData();
       formData.append("user_id", String(currentUserId));
       formData.append("image", imageFile);
-      const res = await fetch(`${API_BASE}/food/image-analyze/mock`, {
+      const res = await fetch(`${API_BASE}/food/image-analyze`, {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const message = await res.text();
+        throw new Error(`HTTP ${res.status}: ${message}`);
+      }
       setImageResult(await res.json());
     } catch (err: unknown) {
       setImageError(err instanceof Error ? err.message : "分析失败");
@@ -171,6 +174,7 @@ export default function FoodPage() {
             )}
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+          <p className="text-xs text-gray-400">支持 jpg、png、webp，图片大小不超过 5MB。</p>
           <button onClick={handleImageAnalyze} disabled={imageLoading || !imageFile || !currentUserId}
             className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
             {imageLoading ? "识别中…" : "识别食物"}
@@ -196,6 +200,11 @@ export default function FoodPage() {
             <span>{activeResult.total_calories} kcal</span>
           </div>
           <p className="text-xs text-gray-400 italic">{activeResult.suggestion}</p>
+          {tab === "image" && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              图片识别热量仅为估算，请确认份量后保存。
+            </p>
+          )}
           <button onClick={() => handleSave(activeResult)} disabled={!currentUserId}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
             确认并保存记录

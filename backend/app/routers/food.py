@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -15,6 +15,9 @@ from app.schemas import (
 from app.services.ai_service import ai_service
 
 router = APIRouter(prefix="/food", tags=["food"])
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 @router.post("/text-analyze/mock", response_model=FoodAnalyzeResponse)
@@ -39,7 +42,30 @@ async def image_analyze_mock(
     image: UploadFile = File(...),
 ):
     image_bytes = await image.read()
-    result = await ai_service.analyze_food_image(image_bytes)
+    result = await ai_service.mock_analyze_food_image(image_bytes)
+    return result
+
+
+@router.post("/image-analyze", response_model=FoodAnalyzeResponse)
+async def image_analyze(
+    user_id: int = Form(...),
+    image: UploadFile = File(...),
+):
+    content_type = image.content_type or ""
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported image type. Please upload jpg, jpeg, png, or webp.",
+        )
+
+    image_bytes = await image.read()
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Image is too large. Please upload an image smaller than 5MB.",
+        )
+
+    result = await ai_service.analyze_food_image(image_bytes, content_type)
     return result
 
 

@@ -8,6 +8,7 @@ Chat Completions endpoint. Vision remains mock-only until Phase 3.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -84,9 +85,73 @@ class AIService:
         data = json.loads(raw)
         return data["choices"][0]["message"]["content"]
 
-    async def call_vision_model(self, prompt: str, image_url: str) -> str:
-        """Call DashScope vision model. Phase 3 implementation."""
-        return f"[mock] vision model ({settings.vision_model}) response"
+    async def call_vision_model(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        image_data_url: str,
+        temperature: float = 0.1,
+    ) -> Optional[str]:
+        """Call DashScope vision model. Returns None when unavailable."""
+        if not settings.dashscope_api_key:
+            logger.warning(
+                "DASHSCOPE_API_KEY is not set; using fallback for VISION_MODEL=%s",
+                settings.vision_model,
+            )
+            return None
+
+        payload = {
+            "model": settings.vision_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_prompt},
+                        {"type": "image_url", "image_url": {"url": image_data_url}},
+                    ],
+                },
+            ],
+            "temperature": temperature,
+        }
+
+        try:
+            return await asyncio.to_thread(self._post_vision_model_sync, payload)
+        except Exception as exc:  # noqa: BLE001 - never let model failures crash API
+            logger.exception(
+                "DashScope vision model call failed for VISION_MODEL=%s: %s",
+                settings.vision_model,
+                exc,
+            )
+            return None
+
+    def _post_vision_model_sync(self, payload: dict[str, Any]) -> str:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        request = urllib.request.Request(
+            DASHSCOPE_CHAT_COMPLETIONS_URL,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {settings.dashscope_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                raw = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:800]
+            raise RuntimeError(
+                f"DashScope HTTP {exc.code} for VISION_MODEL={settings.vision_model}: {detail}"
+            ) from exc
+
+        data = json.loads(raw)
+        return data["choices"][0]["message"]["content"]
+
+    def image_bytes_to_data_url(self, image_bytes: bytes, content_type: str) -> str:
+        encoded = base64.b64encode(image_bytes).decode("ascii")
+        return f"data:{content_type};base64,{encoded}"
 
     # ── JSON parsing helpers ─────────────────────────────────────────────────
 
@@ -150,6 +215,14 @@ class AIService:
                 return float(match.group(0))
         return default
 
+    def _normalize_estimated_weight(self, value: Any) -> str:
+        if value is None or value == "":
+            return "unknown"
+        if isinstance(value, (int, float)):
+            return f"{value:g}g"
+        text = str(value).strip()
+        return text or "unknown"
+
     def _as_int(self, value: Any, default: int = 1) -> int:
         try:
             return int(float(value))
@@ -161,7 +234,7 @@ class AIService:
     async def mock_analyze_food_text(self, text: str) -> dict[str, Any]:
         return self._fallback_food_analysis("Phase 1 mock result. AI will be connected in Phase 2.")
 
-    async def analyze_food_image(self, image_bytes: bytes) -> dict[str, Any]:
+    async def mock_analyze_food_image(self, image_bytes: bytes) -> dict[str, Any]:
         """Analyze food image and return structured nutrition data."""
         return {
             "foods": [
@@ -246,6 +319,48 @@ class AIService:
             logger.warning("Failed to parse food analysis JSON: %s", exc)
             return self._fallback_food_analysis(
                 "Qwen 输出格式不稳定，已返回 fallback 估算结果，仅供参考。"
+            )
+
+    async def analyze_food_image(self, image_bytes: bytes, content_type: str) -> dict[str, Any]:
+        system_prompt = (
+            "你是一个减脂饮食分析助手。请根据图片识别其中可能的食物，并估算每种食物的"
+            "大致重量、热量、蛋白质、碳水、脂肪。图片热量识别是估算，不是绝对准确。"
+            "如果无法识别或图片不是食物，返回空 foods 和低置信度。只输出 JSON 对象，不要输出 Markdown。"
+        )
+        user_prompt = json.dumps(
+            {
+                "task": "识别图片中的食物并估算营养。",
+                "required_json_schema": {
+                    "foods": [
+                        {
+                            "name": "食物名称",
+                            "estimated_weight": "估算重量",
+                            "calories": 0,
+                            "protein": 0,
+                            "carbs": 0,
+                            "fat": 0,
+                        }
+                    ],
+                    "total_calories": 0,
+                    "confidence": "medium",
+                    "suggestion": "这只是基于图片的粗略估算，建议手动确认份量。",
+                },
+            },
+            ensure_ascii=False,
+        )
+        image_data_url = self.image_bytes_to_data_url(image_bytes, content_type)
+        raw = await self.call_vision_model(system_prompt, user_prompt, image_data_url)
+        if not raw:
+            return self._fallback_image_analysis(
+                "当前未能调用 Qwen-VL 图片识别，以下为 fallback 估算结果。图片热量识别仅为估算，请确认份量后保存。"
+            )
+
+        try:
+            return self._normalize_image_analysis(self.extract_json_object(raw))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to parse image analysis JSON: %s", exc)
+            return self._fallback_image_analysis(
+                "Qwen-VL 输出格式不稳定，已返回 fallback 估算结果。图片热量识别仅为估算，请确认份量后保存。"
             )
 
     async def generate_meal_plan(
@@ -383,16 +498,7 @@ class AIService:
         for item in data.get("foods") or []:
             if not isinstance(item, dict):
                 continue
-            foods.append(
-                {
-                    "name": str(item.get("name") or "未识别食物"),
-                    "estimated_weight": item.get("estimated_weight") or item.get("weight"),
-                    "calories": self._as_float(item.get("calories")),
-                    "protein": self._as_float(item.get("protein")),
-                    "carbs": self._as_float(item.get("carbs")),
-                    "fat": self._as_float(item.get("fat")),
-                }
-            )
+            foods.append(self._normalize_food_item(item))
 
         if not foods:
             return self._fallback_food_analysis("未能解析食物明细，已返回 fallback 估算。")
@@ -405,6 +511,51 @@ class AIService:
             "foods": foods,
             "total_calories": total_calories,
             "suggestion": str(data.get("suggestion") or "以上为估算值，建议结合实际份量调整。"),
+        }
+
+    def _normalize_image_analysis(self, data: dict[str, Any]) -> dict[str, Any]:
+        foods = []
+        for item in data.get("foods") or []:
+            if not isinstance(item, dict):
+                continue
+            foods.append(self._normalize_food_item(item))
+
+        confidence = str(data.get("confidence") or "medium").lower()
+        if confidence not in {"high", "medium", "low", "fallback"}:
+            confidence = "medium"
+
+        total_calories = self._as_float(
+            data.get("total_calories"),
+            sum(food["calories"] for food in foods),
+        )
+        if not foods:
+            confidence = "low"
+            total_calories = 0
+
+        suggestion = str(
+            data.get("suggestion")
+            or "图片识别结果仅为估算。建议手动确认份量后再保存。"
+        )
+        if "估算" not in suggestion:
+            suggestion += " 图片识别热量仅为估算，请确认份量后保存。"
+
+        return {
+            "foods": foods,
+            "total_calories": total_calories,
+            "confidence": confidence,
+            "suggestion": suggestion,
+        }
+
+    def _normalize_food_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "name": str(item.get("name") or "未识别食物"),
+            "estimated_weight": self._normalize_estimated_weight(
+                item.get("estimated_weight") if item.get("estimated_weight") is not None else item.get("weight")
+            ),
+            "calories": self._as_float(item.get("calories")),
+            "protein": self._as_float(item.get("protein")),
+            "carbs": self._as_float(item.get("carbs")),
+            "fat": self._as_float(item.get("fat")),
         }
 
     def _normalize_meal_plan(
@@ -491,6 +642,23 @@ class AIService:
                 },
             ],
             "total_calories": 400,
+            "suggestion": suggestion,
+        }
+
+    def _fallback_image_analysis(self, suggestion: str) -> dict[str, Any]:
+        return {
+            "foods": [
+                {
+                    "name": "鸡胸肉饭",
+                    "estimated_weight": "350g",
+                    "calories": 520,
+                    "protein": 38,
+                    "carbs": 55,
+                    "fat": 12,
+                }
+            ],
+            "total_calories": 520,
+            "confidence": "fallback",
             "suggestion": suggestion,
         }
 

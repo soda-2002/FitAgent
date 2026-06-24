@@ -19,3 +19,10 @@ backend/uploads/
 
 # system
 .DS_Store
+
+# local test logs
+.playwright-cli/
+
+# local prompts
+prompt*.md
+backend/fitagent.db

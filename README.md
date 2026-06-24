@@ -95,9 +95,9 @@ TEXT_MODEL=Qwen3.6-Flash
 VISION_MODEL=qwen-vl-plus
 ```
 
-Phase 2 只调用 `TEXT_MODEL` 对应的 DashScope Qwen 文本模型。`VISION_MODEL=qwen-vl-plus` 仅为 Phase 3 预留，当前图片识别仍然是 mock。
+Phase 2 调用 `TEXT_MODEL` 对应的 DashScope Qwen 文本模型。Phase 3 调用 `VISION_MODEL` 对应的 DashScope Qwen-VL 视觉模型，默认配置为 `qwen-vl-plus`。
 
-如果没有配置 `DASHSCOPE_API_KEY`，或 Qwen 调用失败，后端会返回结构化 mock/fallback 结果，不会让接口整体崩溃。不要把真实 API Key 写入 README、前端代码或日志。
+如果没有配置 `DASHSCOPE_API_KEY`，或 Qwen / Qwen-VL 调用失败，后端会返回结构化 mock/fallback 结果，不会让接口整体崩溃。不要把真实 API Key 写入 README、前端代码或日志。
 
 ---
 
@@ -170,6 +170,16 @@ curl -X POST http://localhost:8000/food/image-analyze/mock \
   -F "user_id=1" \
   -F "image=@/path/to/food.jpg"
 ```
+
+### 图片上传分析（Qwen-VL）
+
+```bash
+curl -X POST http://localhost:8000/food/image-analyze \
+  -F "user_id=1" \
+  -F "image=@/path/to/food.jpg"
+```
+
+图片上传支持 `jpg / jpeg / png / webp`，限制 5MB 以内。图片热量识别只是估算，不保证营养数据绝对准确，建议用户确认份量后再保存。
 
 ### 保存饮食记录
 
@@ -287,12 +297,16 @@ curl -X POST http://localhost:8000/agent/chat \
 
 ---
 
-## Phase 3 待办：接入 Qwen-VL 图片识别
+## Phase 3 已完成功能：接入 Qwen-VL 图片识别
 
-- [ ] 实现 `AIService.call_vision_model()` — 调用 DashScope Qwen-VL
-- [ ] 实现 `analyze_food_image()` — 图片 base64 编码，多模态调用，结构化 JSON 输出
-- [ ] 前端图片上传压缩（控制图片大小 < 1MB）
-- [ ] 将 `/food/image-analyze/mock` → `/food/image-analyze`（路由升级）
+- [x] 实现 `AIService.call_vision_model()`：通过 DashScope OpenAI 兼容接口调用 `VISION_MODEL`
+- [x] 实现 `analyze_food_image()`：图片 base64 data URL 编码，多模态调用，结构化 JSON 输出
+- [x] 新增 `POST /food/image-analyze`：支持 jpg / jpeg / png / webp，限制 5MB
+- [x] 保留 `POST /food/image-analyze/mock` 作为 mock/fallback 调试入口
+- [x] 前端 Food 图片上传默认调用真实 `/food/image-analyze`
+- [x] 图片识别结果仍需用户确认后，才通过 `POST /food/logs` 保存，`source=image`
+- [x] 没有 API Key、视觉模型调用失败或 JSON 解析失败时，返回结构化 fallback
+- [x] UI 提醒图片识别热量仅为估算，请确认份量后保存
 
 ---
 
@@ -301,3 +315,6 @@ curl -X POST http://localhost:8000/agent/chat \
 - [ ] 实现 `coach_chat()` — 真实 Agent Tool Calling
 - [ ] 工具：`get_user_profile()` / `get_food_history()` / `get_workout_plan()` / `save_user_record()`
 - [ ] AI 回复基于用户历史数据个性化生成
+- [ ] 周总结报告
+- [ ] 更完整的 Agent Memory
+- [ ] Dashboard 数据统计优化
