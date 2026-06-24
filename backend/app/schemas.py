@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import date as DateType
-from typing import Optional, List
+from typing import Optional, List, Any
 from pydantic import BaseModel
 
 
@@ -103,13 +103,15 @@ class WorkoutPlanRequest(BaseModel):
 class WorkoutDay(BaseModel):
     day: str
     focus: str
+    duration: Optional[str] = None
     exercises: List[dict]
 
 
 class WorkoutPlanResponse(BaseModel):
     user_id: int
     plan: List[WorkoutDay]
-    note: str
+    note: Optional[str] = None
+    summary: Optional[str] = None
 
 
 class WorkoutPlanRead(BaseModel):
@@ -131,4 +133,5 @@ class AgentChatRequest(BaseModel):
 
 class AgentChatResponse(BaseModel):
     reply: str
-    note: str
+    note: Optional[str] = None
+    used_context: Optional[dict[str, Any]] = None

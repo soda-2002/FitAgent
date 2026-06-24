@@ -22,7 +22,7 @@ export default function MealPlannerPage() {
     setError("");
     setResult(null);
     try {
-      const res = await apiFetch<MealPlanResponse>("/meal/plan/mock", {
+      const res = await apiFetch<MealPlanResponse>("/meal/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

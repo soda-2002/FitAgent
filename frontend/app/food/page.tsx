@@ -36,7 +36,7 @@ export default function FoodPage() {
     setTextError("");
     setTextResult(null);
     try {
-      const res = await apiFetch<FoodAnalyzeResponse>("/food/text-analyze/mock", {
+      const res = await apiFetch<FoodAnalyzeResponse>("/food/text-analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: currentUserId, text: textInput }),

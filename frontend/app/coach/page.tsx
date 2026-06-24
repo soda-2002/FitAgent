@@ -29,7 +29,7 @@ export default function CoachPage() {
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
     try {
-      const res = await apiFetch<AgentChatResponse>("/agent/chat/mock", {
+      const res = await apiFetch<AgentChatResponse>("/agent/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: currentUserId, message: text }),

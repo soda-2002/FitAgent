@@ -60,22 +60,30 @@ export interface MealPlanResponse {
 export interface WorkoutExercise {
   name: string;
   sets: number;
-  reps: number;
+  reps: number | string;
+  note?: string;
 }
 
 export interface WorkoutDay {
   day: string;
   focus: string;
+  duration?: string;
   exercises: WorkoutExercise[];
 }
 
 export interface WorkoutPlanResponse {
   user_id: number;
   plan: WorkoutDay[];
-  note: string;
+  note?: string;
+  summary?: string;
 }
 
 export interface AgentChatResponse {
   reply: string;
-  note: string;
+  note?: string;
+  used_context?: {
+    has_profile: boolean;
+    food_logs_count: number;
+    has_workout_plan: boolean;
+  };
 }

@@ -72,7 +72,7 @@ source .venv/bin/activate       # Windows: .venv\Scripts\activate
 # 2. 安装依赖
 pip install -r requirements.txt
 
-# 3. 配置环境变量（Phase 1 可跳过，无需真实 API Key）
+# 3. 配置环境变量
 cp .env.example .env
 
 # 4. 启动服务（数据库在首次启动时自动初始化）
@@ -82,6 +82,22 @@ uvicorn app.main:app --reload --port 8000
 后端运行于 `http://localhost:8000`。
 
 当前后端 CORS 允许 `http://localhost:3000`。如果前端开发服务运行到 `3001` 或其他端口，需要同步修改 `backend/app/main.py` 中的 `allow_origins`。
+
+---
+
+## 环境变量
+
+后端从 `backend/.env` 读取配置：
+
+```bash
+DASHSCOPE_API_KEY=your_api_key_here
+TEXT_MODEL=Qwen3.6-Flash
+VISION_MODEL=qwen-vl-plus
+```
+
+Phase 2 只调用 `TEXT_MODEL` 对应的 DashScope Qwen 文本模型。`VISION_MODEL=qwen-vl-plus` 仅为 Phase 3 预留，当前图片识别仍然是 mock。
+
+如果没有配置 `DASHSCOPE_API_KEY`，或 Qwen 调用失败，后端会返回结构化 mock/fallback 结果，不会让接口整体崩溃。不要把真实 API Key 写入 README、前端代码或日志。
 
 ---
 
@@ -139,6 +155,14 @@ curl -X POST http://localhost:8000/food/text-analyze/mock \
   -d '{"user_id":1,"text":"两个鸡蛋，一碗米饭"}'
 ```
 
+### 文字饮食分析（Qwen 文本）
+
+```bash
+curl -X POST http://localhost:8000/food/text-analyze \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":1,"text":"两个鸡蛋，一碗米饭"}'
+```
+
 ### 图片上传分析（mock）
 
 ```bash
@@ -169,10 +193,26 @@ curl -X POST http://localhost:8000/meal/plan/mock \
   -d '{"user_id":1,"ingredients":"鸡蛋、鸡胸肉、西红柿","preference":"高蛋白、低脂"}'
 ```
 
+### 生成减脂餐推荐（Qwen 文本）
+
+```bash
+curl -X POST http://localhost:8000/meal/plan \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":1,"ingredients":"鸡蛋、鸡胸肉、西红柿","preference":"高蛋白、低脂"}'
+```
+
 ### 生成健身计划（mock）
 
 ```bash
 curl -X POST http://localhost:8000/workout/plan/mock \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":1}'
+```
+
+### 生成健身计划（Qwen 文本）
+
+```bash
+curl -X POST http://localhost:8000/workout/plan \
   -H "Content-Type: application/json" \
   -d '{"user_id":1}'
 ```
@@ -183,6 +223,14 @@ curl -X POST http://localhost:8000/workout/plan/mock \
 curl -X POST http://localhost:8000/agent/chat/mock \
   -H "Content-Type: application/json" \
   -d '{"user_id":1,"message":"我今天吃得怎么样？"}'
+```
+
+### AI Coach 对话（Qwen 文本）
+
+```bash
+curl -X POST http://localhost:8000/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":1,"message":"我今天吃多了怎么办？"}'
 ```
 
 ### Swagger UI
@@ -226,14 +274,16 @@ curl -X POST http://localhost:8000/agent/chat/mock \
 
 ---
 
-## Phase 2 待办：接入 Qwen 文本模型
+## Phase 2 已完成功能：接入 Qwen 文本模型
 
-- [ ] 在 `backend/.env` 中填写真实 `DASHSCOPE_API_KEY`
-- [ ] 实现 `AIService.call_text_model()` — 调用 DashScope OpenAI 兼容接口
-- [ ] 实现 `analyze_food_text()` — 真实营养分析，JSON 输出
-- [ ] 实现 `generate_meal_plan()` — 基于用户 Profile 生成减脂餐
-- [ ] 实现 `generate_workout_plan()` — 基于用户 Profile 生成真实训练计划
-- [ ] 将 `/food/text-analyze/mock` → `/food/text-analyze`（路由升级）
+- [x] `AIService.call_text_model()` 通过 DashScope OpenAI 兼容接口调用 `TEXT_MODEL`
+- [x] 新增 `POST /food/text-analyze`：基于用户 Profile 的文本饮食估算
+- [x] 新增 `POST /meal/plan`：基于用户 Profile 和食材偏好的减脂餐推荐
+- [x] 新增 `POST /workout/plan`：基于用户 Profile 的一周训练计划，并保存到 `workout_plans`
+- [x] 新增 `POST /agent/chat`：读取 Profile、最近饮食记录、最近训练计划后生成中文建议
+- [x] 保留所有 `/mock` 接口；没有 API Key 或模型异常时返回结构化 fallback
+- [x] 前端 Food / Meal / Workout / Coach 已切到真实文本接口
+- [x] 图片上传识别仍保留 `/food/image-analyze/mock`，不调用视觉模型
 
 ---
 

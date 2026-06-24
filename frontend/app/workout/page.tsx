@@ -18,7 +18,7 @@ export default function WorkoutPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await apiFetch<WorkoutPlanResponse>("/workout/plan/mock", {
+      const res = await apiFetch<WorkoutPlanResponse>("/workout/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: currentUserId }),
@@ -62,20 +62,22 @@ export default function WorkoutPage() {
                 </span>
                 <div>
                   <p className="font-semibold text-gray-800 text-sm">{day.day}</p>
-                  <p className="text-xs text-gray-500">{day.focus}</p>
+                  <p className="text-xs text-gray-500">
+                    {day.focus}{day.duration ? ` · ${day.duration}` : ""}
+                  </p>
                 </div>
               </div>
               <div className="space-y-1">
                 {day.exercises.map((ex, j) => (
                   <div key={j} className="flex items-center justify-between text-sm bg-gray-50 rounded px-3 py-1.5">
                     <span className="text-gray-700">{ex.name}</span>
-                    <span className="text-gray-400 text-xs">{ex.sets} 组 × {ex.reps} 次</span>
+                    <span className="text-gray-400 text-xs">{ex.sets} 组 × {ex.reps}</span>
                   </div>
                 ))}
               </div>
             </div>
           ))}
-          <p className="text-xs text-gray-400 italic">{plan.note}</p>
+          <p className="text-xs text-gray-400 italic">{plan.summary ?? plan.note}</p>
         </div>
       )}
 
