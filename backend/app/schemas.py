@@ -71,6 +71,57 @@ class FoodLogRead(FoodLogCreate):
         from_attributes = True
 
 
+# ── Daily logs ────────────────────────────────────────────────────────────────
+
+class DailyLogCreate(BaseModel):
+    user_id: int
+    weight: Optional[float] = None
+    mood: Optional[str] = None
+    workout_done: Optional[bool] = None
+    sleep_hours: Optional[float] = None
+    summary: Optional[str] = None
+
+
+class DailyLogRead(DailyLogCreate):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+
+class DashboardProfile(BaseModel):
+    height: Optional[float] = None
+    weight: Optional[float] = None
+    target_weight: Optional[float] = None
+    goal: Optional[str] = None
+
+
+class DashboardTodayStats(BaseModel):
+    total_calories: float
+    total_protein: float
+    total_carbs: float
+    total_fat: float
+    food_logs_count: int
+
+
+class DashboardWeekStats(BaseModel):
+    avg_calories: float
+    avg_protein: float
+    food_logs_count: int
+    workout_plan_exists: bool
+    daily_logs_count: int
+
+
+class DashboardResponse(BaseModel):
+    profile: Optional[DashboardProfile] = None
+    today: DashboardTodayStats
+    week: DashboardWeekStats
+    suggestion: str
+
+
 # ── Meal ──────────────────────────────────────────────────────────────────────
 
 class MealPlanRequest(BaseModel):
@@ -135,3 +186,20 @@ class AgentChatResponse(BaseModel):
     reply: str
     note: Optional[str] = None
     used_context: Optional[dict[str, Any]] = None
+
+
+class WeekReportRequest(BaseModel):
+    user_id: int
+
+
+class WeekReportContent(BaseModel):
+    summary: str
+    diet_review: str
+    workout_review: str
+    problems: List[str]
+    next_week_plan: List[str]
+
+
+class WeekReportResponse(BaseModel):
+    report: WeekReportContent
+    used_context: dict[str, Any]

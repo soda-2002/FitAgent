@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, date
 from typing import Optional, List
-from sqlalchemy import Integer, String, Float, Text, Date, DateTime, ForeignKey
+from sqlalchemy import Boolean, Integer, String, Float, Text, Date, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -62,6 +62,10 @@ class DailyLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    mood: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    workout_done: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    sleep_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

@@ -26,3 +26,4 @@ backend/uploads/
 # local prompts
 prompt*.md
 backend/fitagent.db
+.playwright-cli/

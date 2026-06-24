@@ -42,6 +42,41 @@ export interface FoodLog {
   created_at: string;
 }
 
+export interface DailyLog {
+  id: number;
+  user_id: number;
+  weight?: number;
+  mood?: string;
+  workout_done?: boolean;
+  sleep_hours?: number;
+  summary?: string;
+  created_at: string;
+}
+
+export interface DashboardResponse {
+  profile?: {
+    height?: number;
+    weight?: number;
+    target_weight?: number;
+    goal?: string;
+  } | null;
+  today: {
+    total_calories: number;
+    total_protein: number;
+    total_carbs: number;
+    total_fat: number;
+    food_logs_count: number;
+  };
+  week: {
+    avg_calories: number;
+    avg_protein: number;
+    food_logs_count: number;
+    workout_plan_exists: boolean;
+    daily_logs_count: number;
+  };
+  suggestion: string;
+}
+
 export interface MealItem {
   name: string;
   calories: number;
@@ -84,6 +119,22 @@ export interface AgentChatResponse {
   used_context?: {
     has_profile: boolean;
     food_logs_count: number;
+    daily_logs_count: number;
+    has_workout_plan: boolean;
+  };
+}
+
+export interface WeekReportResponse {
+  report: {
+    summary: string;
+    diet_review: string;
+    workout_review: string;
+    problems: string[];
+    next_week_plan: string[];
+  };
+  used_context: {
+    food_logs_count: number;
+    daily_logs_count: number;
     has_workout_plan: boolean;
   };
 }

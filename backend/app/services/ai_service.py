@@ -460,7 +460,9 @@ class AIService:
     async def coach_chat(self, message: str, user_context: dict[str, Any]) -> dict[str, Any]:
         system_prompt = (
             "你是 FitAgent 的 AI 减脂教练。根据用户资料、饮食记录和训练计划给出可执行建议。"
-            "不要做医疗诊断，不要建议极端节食；用中文回答。只输出 JSON 对象。"
+            "回答要结合用户已有记录；如果记录不足，要说明需要继续记录；"
+            "不要编造用户没有记录的数据。不要做医疗诊断，不要建议极端节食；"
+            "用中文回答。只输出 JSON 对象。"
         )
         user_prompt = json.dumps(
             {
@@ -490,6 +492,54 @@ class AIService:
         return {
             "reply": "Qwen 输出格式不稳定。建议今天先记录饮食和训练情况，下一餐减少油脂和精制碳水，保持正常作息。",
         }
+
+    async def generate_week_report(
+        self,
+        user_profile: dict[str, Any],
+        food_logs: list[dict[str, Any]],
+        daily_logs: list[dict[str, Any]],
+        latest_workout_plan: Any,
+    ) -> dict[str, Any]:
+        food_logs_count = len(food_logs)
+        daily_logs_count = len(daily_logs)
+        has_workout_plan = latest_workout_plan is not None
+
+        system_prompt = (
+            "你是 FitAgent 的减脂管理周总结助手。请基于用户真实记录生成中文周总结，"
+            "不做医疗诊断，不编造不存在的饮食、训练或体重数据。"
+            "如果记录不足，必须明确说明只能给初步建议。只输出 JSON 对象。"
+        )
+        user_prompt = json.dumps(
+            {
+                "task": "生成最近 7 天减脂管理周总结。",
+                "required_json_schema": {
+                    "summary": "本周总评",
+                    "diet_review": "饮食回顾",
+                    "workout_review": "训练回顾",
+                    "problems": ["主要问题"],
+                    "next_week_plan": ["下周建议"],
+                },
+                "user_profile": user_profile,
+                "recent_7_day_food_logs": food_logs,
+                "recent_7_daily_logs": daily_logs,
+                "latest_workout_plan": latest_workout_plan,
+            },
+            ensure_ascii=False,
+        )
+        raw = await self.call_text_model(system_prompt, user_prompt, temperature=0.3)
+        if not raw:
+            return self._fallback_week_report(food_logs_count, daily_logs_count, has_workout_plan)
+
+        try:
+            return self._normalize_week_report(
+                self.extract_json_object(raw),
+                food_logs_count=food_logs_count,
+                daily_logs_count=daily_logs_count,
+                has_workout_plan=has_workout_plan,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to parse week report JSON: %s", exc)
+            return self._fallback_week_report(food_logs_count, daily_logs_count, has_workout_plan)
 
     # ── Normalizers and fallback payloads ─────────────────────────────────────
 
@@ -621,6 +671,48 @@ class AIService:
             "summary": str(data.get("summary") or "本计划为估算建议，请根据身体状态调整强度。"),
         }
 
+    def _normalize_week_report(
+        self,
+        data: dict[str, Any],
+        food_logs_count: int,
+        daily_logs_count: int,
+        has_workout_plan: bool,
+    ) -> dict[str, Any]:
+        report_data = data.get("report") if isinstance(data.get("report"), dict) else data
+        fallback = self._fallback_week_report(food_logs_count, daily_logs_count, has_workout_plan)
+
+        summary = str(report_data.get("summary") or fallback["report"]["summary"]).strip()
+        diet_review = str(report_data.get("diet_review") or fallback["report"]["diet_review"]).strip()
+        workout_review = str(report_data.get("workout_review") or fallback["report"]["workout_review"]).strip()
+        problems = self._as_str_list(report_data.get("problems")) or fallback["report"]["problems"]
+        next_week_plan = (
+            self._as_str_list(report_data.get("next_week_plan"))
+            or fallback["report"]["next_week_plan"]
+        )
+
+        return {
+            "report": {
+                "summary": summary,
+                "diet_review": diet_review,
+                "workout_review": workout_review,
+                "problems": problems,
+                "next_week_plan": next_week_plan,
+            },
+            "used_context": {
+                "food_logs_count": food_logs_count,
+                "daily_logs_count": daily_logs_count,
+                "has_workout_plan": has_workout_plan,
+            },
+        }
+
+    def _as_str_list(self, value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if value is None:
+            return []
+        text = str(value).strip()
+        return [text] if text else []
+
     def _fallback_food_analysis(self, suggestion: str) -> dict[str, Any]:
         return {
             "foods": [
@@ -751,6 +843,46 @@ class AIService:
                 },
             ],
             "summary": summary,
+        }
+
+    def _fallback_week_report(
+        self,
+        food_logs_count: int,
+        daily_logs_count: int,
+        has_workout_plan: bool,
+    ) -> dict[str, Any]:
+        if food_logs_count == 0 and daily_logs_count == 0:
+            summary = "当前记录不足，只能给初步建议。建议先连续记录饮食和每日打卡。"
+        else:
+            summary = "本周已有部分记录，可以做初步复盘，但仍建议继续补充每日记录。"
+
+        return {
+            "report": {
+                "summary": summary,
+                "diet_review": (
+                    f"最近 7 天共有 {food_logs_count} 条饮食记录。"
+                    "记录越完整，热量和营养判断越可靠。"
+                ),
+                "workout_review": (
+                    "已有训练计划，可结合每日打卡观察执行情况。"
+                    if has_workout_plan
+                    else "当前还没有训练计划，建议先生成一份保守的一周计划。"
+                ),
+                "problems": [
+                    "记录样本仍偏少，暂不能判断稳定趋势。",
+                    "请避免极端节食，优先保持规律饮食和睡眠。",
+                ],
+                "next_week_plan": [
+                    "每天至少记录一餐饮食和一次每日打卡。",
+                    "每周完成 2-3 次中低强度训练或快走。",
+                    "晚餐优先增加蔬菜和优质蛋白，控制高油食物。",
+                ],
+            },
+            "used_context": {
+                "food_logs_count": food_logs_count,
+                "daily_logs_count": daily_logs_count,
+                "has_workout_plan": has_workout_plan,
+            },
         }
 
 

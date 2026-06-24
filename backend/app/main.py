@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.routers import health, profile, food, meal, workout, agent
+from app.routers import health, profile, food, meal, workout, agent, daily, dashboard
 
 
 @asynccontextmanager
@@ -34,3 +34,5 @@ app.include_router(food.router)
 app.include_router(meal.router)
 app.include_router(workout.router)
 app.include_router(agent.router)
+app.include_router(daily.router)
+app.include_router(dashboard.router)

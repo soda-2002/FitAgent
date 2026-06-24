@@ -29,7 +29,8 @@ fitagent/
 │   │   ├── food/page.tsx     # 食物分析（文字 + 图片）
 │   │   ├── meal/page.tsx     # 食材推荐减脂餐
 │   │   ├── workout/page.tsx  # 健身计划
-│   │   └── coach/page.tsx    # AI Coach 对话
+│   │   ├── daily/page.tsx    # 每日打卡
+│   │   └── coach/page.tsx    # AI Coach 对话 + 周总结
 │   ├── components/NavBar.tsx
 │   ├── lib/api.ts            # 统一 API 请求封装
 │   ├── lib/currentUser.ts    # Demo 当前用户 localStorage 状态
@@ -44,11 +45,13 @@ fitagent/
 │   │   ├── models.py         # ORM 数据模型
 │   │   ├── schemas.py        # Pydantic 请求/响应模型
 │   │   ├── routers/
+│   │   │   ├── dashboard.py
 │   │   │   ├── health.py
 │   │   │   ├── profile.py
 │   │   │   ├── food.py
 │   │   │   ├── meal.py
 │   │   │   ├── workout.py
+│   │   │   ├── daily.py
 │   │   │   └── agent.py
 │   │   └── services/
 │   │       └── ai_service.py # AI 服务（Phase 1 为 mock）
@@ -81,7 +84,7 @@ uvicorn app.main:app --reload --port 8000
 
 后端运行于 `http://localhost:8000`。
 
-当前后端 CORS 允许 `http://localhost:3000`。如果前端开发服务运行到 `3001` 或其他端口，需要同步修改 `backend/app/main.py` 中的 `allow_origins`。
+当前后端 CORS 允许 `http://localhost:3000`、`http://localhost:3001`、`http://127.0.0.1:3000`、`http://127.0.0.1:3001`。
 
 ---
 
@@ -120,6 +123,8 @@ npm run dev
 ## 数据库初始化
 
 SQLite 数据库文件 `backend/fitagent.db` **在后端首次启动时自动创建**，无需额外操作。
+
+Phase 4 对已有 `daily_logs` 表做了安全扩展：启动后端时会检查 `weight`、`mood`、`workout_done`、`sleep_hours` 字段，旧数据库缺字段时自动 `ALTER TABLE ADD COLUMN`，不会删除已有数据。
 
 如需重置数据库：
 
@@ -195,6 +200,28 @@ curl -X POST http://localhost:8000/food/logs \
 curl http://localhost:8000/food/logs/1
 ```
 
+### Dashboard 真实数据统计
+
+```bash
+curl http://localhost:8000/dashboard/1
+```
+
+返回用户 Profile、今日饮食统计、最近 7 天平均热量/蛋白质、饮食记录数量、每日打卡数量、训练计划状态和规则建议。
+
+### 保存每日打卡
+
+```bash
+curl -X POST http://localhost:8000/daily/logs \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":1,"weight":79.5,"mood":"一般","workout_done":true,"sleep_hours":7,"summary":"今天饮食基本正常，晚上做了30分钟有氧。"}'
+```
+
+### 读取最近每日打卡
+
+```bash
+curl http://localhost:8000/daily/logs/1
+```
+
 ### 生成减脂餐推荐（mock）
 
 ```bash
@@ -243,6 +270,18 @@ curl -X POST http://localhost:8000/agent/chat \
   -d '{"user_id":1,"message":"我今天吃多了怎么办？"}'
 ```
 
+`/agent/chat` 会读取用户 Profile、最近 7 天饮食记录、最近 7 条每日打卡和最新训练计划。返回的 `used_context` 会说明实际使用了多少记录。
+
+### 本周总结报告
+
+```bash
+curl -X POST http://localhost:8000/agent/week-report \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":1}'
+```
+
+周总结会读取最近 7 天饮食记录、每日打卡和最新训练计划，调用 Qwen 文本模型生成中文复盘。没有 API Key、记录不足或模型输出格式异常时，会返回结构化 fallback 报告。
+
 ### Swagger UI
 
 访问 `http://localhost:8000/docs` 可查看并测试所有接口。
@@ -280,7 +319,7 @@ curl -X POST http://localhost:8000/agent/chat \
 
 ## 版本控制说明
 
-当前 `fitagent/` 根目录不是 git 仓库，只有 `frontend/` 内存在 `.git`。后续进入 Phase 2 前，建议把 `fitagent/` 根目录作为统一仓库管理，以便同时追踪 `frontend/` 和 `backend/` 的改动。
+建议继续以 `fitagent/` 根目录作为统一仓库管理，便于同时追踪 `frontend/`、`backend/` 和文档改动。
 
 ---
 
@@ -310,11 +349,23 @@ curl -X POST http://localhost:8000/agent/chat \
 
 ---
 
-## Phase 4 待办：Agent + Memory
+## Phase 4 已完成功能：Agent Memory + 周总结
 
-- [ ] 实现 `coach_chat()` — 真实 Agent Tool Calling
-- [ ] 工具：`get_user_profile()` / `get_food_history()` / `get_workout_plan()` / `save_user_record()`
-- [ ] AI 回复基于用户历史数据个性化生成
-- [ ] 周总结报告
-- [ ] 更完整的 Agent Memory
-- [ ] Dashboard 数据统计优化
+- [x] 新增 `GET /dashboard/{user_id}`：读取真实 Profile、饮食记录、训练计划和每日打卡，返回 Dashboard 统计与规则建议
+- [x] 新增 Daily Check-in：`POST /daily/logs` 保存体重、心情、是否训练、睡眠和总结；`GET /daily/logs/{user_id}` 读取最近打卡
+- [x] 新增 `POST /agent/week-report`：基于最近 7 天饮食、每日打卡和最新训练计划生成中文周总结
+- [x] 增强 `/agent/chat`：读取 Profile、最近 7 天饮食记录、最近 7 条每日打卡和最新训练计划，并返回 `used_context`
+- [x] 前端 Dashboard 改为展示真实后端统计，不再只显示 mock 数据
+- [x] 前端新增 `/daily` 页面，支持提交打卡和查看最近 7 条记录
+- [x] Coach 页面新增“生成本周总结”入口，不影响原有聊天功能
+- [x] `daily_logs` 旧表启动时自动补字段，不删除已有数据
+
+## 项目阶段概览
+
+- Phase 1：工程骨架、FastAPI / Next.js / SQLite、Profile、mock 饮食分析、mock 健身计划、mock Coach
+- Phase 1.5：`currentUserId` 本地状态、前后端接口路径和用户上下文修正
+- Phase 2：接入 DashScope Qwen 文本模型，支持饮食文本分析、减脂餐、训练计划和 Coach
+- Phase 3：接入 DashScope Qwen-VL 图片识别，支持真实食物图片分析
+- Phase 4：Agent Memory、真实 Dashboard 统计、每日打卡、周总结和增强 Coach 上下文
+
+> FitAgent 当前仍是减脂管理 Agent Demo，不提供医疗诊断或治疗建议。所有热量、营养和训练建议都应视为估算和健康管理参考。

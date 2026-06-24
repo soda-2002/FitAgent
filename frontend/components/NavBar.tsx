@@ -8,6 +8,7 @@ const links = [
   { href: "/food", label: "Food" },
   { href: "/meal", label: "Meal Planner" },
   { href: "/workout", label: "Workout" },
+  { href: "/daily", label: "Daily" },
   { href: "/coach", label: "AI Coach" },
 ];
 

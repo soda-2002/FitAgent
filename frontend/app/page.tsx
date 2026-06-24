@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useCurrentUserId } from "@/lib/currentUser";
-import type { UserProfile, FoodLog } from "@/types";
+import type { DashboardResponse } from "@/types";
 
 interface HealthResponse {
   status: string;
@@ -12,30 +12,40 @@ interface HealthResponse {
 export default function DashboardPage() {
   const [health, setHealth] = useState<"checking" | "ok" | "error">("checking");
   const currentUserId = useCurrentUserId();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [todayLogs, setTodayLogs] = useState<FoodLog[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState("");
+
+  async function loadDashboard(userId: number | null) {
+    await Promise.resolve();
+
+    if (!userId) {
+      setDashboard(null);
+      setDashboardError("");
+      return;
+    }
+
+    setDashboardLoading(true);
+    setDashboardError("");
+    apiFetch<DashboardResponse>(`/dashboard/${userId}`)
+      .then(setDashboard)
+      .catch((err: unknown) => {
+        setDashboard(null);
+        setDashboardError(err instanceof Error ? err.message : "Dashboard 读取失败");
+      })
+      .finally(() => setDashboardLoading(false));
+  }
 
   useEffect(() => {
     apiFetch<HealthResponse>("/health")
       .then(() => setHealth("ok"))
       .catch(() => setHealth("error"));
 
-    if (!currentUserId) return;
-
-    apiFetch<UserProfile>(`/profile/${currentUserId}`)
-      .then(setProfile)
-      .catch(() => setProfile(null));
-
-    apiFetch<FoodLog[]>(`/food/logs/${currentUserId}`)
-      .then((logs) => {
-        const today = new Date().toISOString().slice(0, 10);
-        setTodayLogs(logs.filter((l) => l.date === today || l.created_at.startsWith(today)));
-      })
-      .catch(() => setTodayLogs([]));
+    const timer = window.setTimeout(() => {
+      loadDashboard(currentUserId);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [currentUserId]);
-
-  const totalCal = todayLogs.reduce((s, l) => s + (l.calories ?? 0), 0);
-  const totalProtein = todayLogs.reduce((s, l) => s + (l.protein ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -73,13 +83,15 @@ export default function DashboardPage() {
             </a>{" "}
             建档。
           </p>
-        ) : profile ? (
+        ) : dashboard?.profile ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <Stat label="身高" value={profile.height ? `${profile.height} cm` : "—"} />
-            <Stat label="体重" value={profile.weight ? `${profile.weight} kg` : "—"} />
-            <Stat label="目标体重" value={profile.target_weight ? `${profile.target_weight} kg` : "—"} />
-            <Stat label="目标" value={profile.goal ?? "—"} />
+            <Stat label="身高" value={dashboard.profile.height ? `${dashboard.profile.height} cm` : "—"} />
+            <Stat label="体重" value={dashboard.profile.weight ? `${dashboard.profile.weight} kg` : "—"} />
+            <Stat label="目标体重" value={dashboard.profile.target_weight ? `${dashboard.profile.target_weight} kg` : "—"} />
+            <Stat label="目标" value={dashboard.profile.goal ?? "—"} />
           </div>
+        ) : dashboardLoading ? (
+          <p className="text-sm text-gray-400">正在读取 Dashboard 数据…</p>
         ) : (
           <p className="text-sm text-gray-400">
             当前用户资料读取失败。请前往{" "}
@@ -93,20 +105,36 @@ export default function DashboardPage() {
 
       {/* Today Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard label="今日摄入热量" value={`${totalCal.toFixed(0)} kcal`} color="green" />
-        <StatCard label="今日蛋白质" value={`${totalProtein.toFixed(1)} g`} color="blue" />
-        <StatCard label="今日训练" value="— (mock)" color="purple" />
+        <StatCard label="今日摄入热量" value={`${(dashboard?.today.total_calories ?? 0).toFixed(0)} kcal`} color="green" />
+        <StatCard label="今日蛋白质" value={`${(dashboard?.today.total_protein ?? 0).toFixed(1)} g`} color="blue" />
+        <StatCard label="今日饮食记录" value={`${dashboard?.today.food_logs_count ?? 0} 条`} color="purple" />
       </div>
 
-      {/* AI Suggestion mock */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard label="7 天平均热量" value={`${(dashboard?.week.avg_calories ?? 0).toFixed(0)} kcal`} color="green" />
+        <StatCard label="7 天平均蛋白质" value={`${(dashboard?.week.avg_protein ?? 0).toFixed(1)} g`} color="blue" />
+        <StatCard label="训练计划" value={dashboard?.week.workout_plan_exists ? "已生成" : "未生成"} color="purple" />
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Recent 7 Days</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          <Stat label="饮食记录数量" value={`${dashboard?.week.food_logs_count ?? 0} 条`} />
+          <Stat label="每日打卡数量" value={`${dashboard?.week.daily_logs_count ?? 0} 条`} />
+        </div>
+        {dashboard && dashboard.week.food_logs_count === 0 && (
+          <p className="text-sm text-gray-400 mt-3">
+            还没有饮食记录，先去 <a href="/food" className="text-green-600 underline">Food</a> 页面记录一餐。
+          </p>
+        )}
+      </div>
+
+      {dashboardError && <p className="text-red-600 text-sm">{dashboardError}</p>}
+
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-amber-700 mb-2">AI 今日建议 (mock)</h2>
-        <p className="text-sm text-amber-800">
-          {totalProtein < 50
-            ? "今天蛋白质摄入不足，晚餐建议增加 30g 蛋白质（如鸡胸肉或鸡蛋）。"
-            : "今日营养摄入均衡，保持训练节奏。"}
-        </p>
-        <p className="text-xs text-amber-500 mt-2">Phase 2 接入 Qwen 后将基于真实数据生成建议。</p>
+        <h2 className="text-sm font-semibold text-amber-700 mb-2">今日建议</h2>
+        <p className="text-sm text-amber-800">{dashboard?.suggestion ?? "完成建档和记录后，这里会显示基于真实数据的建议。"}</p>
+        <p className="text-xs text-amber-500 mt-2">建议仅用于减脂管理 Demo，不构成医疗建议。</p>
       </div>
     </div>
   );

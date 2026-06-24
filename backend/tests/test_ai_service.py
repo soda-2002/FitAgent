@@ -98,6 +98,52 @@ class AIServicePhase2Test(unittest.TestCase):
 
         self.assertEqual(result["foods"][0]["estimated_weight"], "unknown")
 
+    def test_week_report_normalizes_missing_list_fields(self):
+        result = AIService()._normalize_week_report(
+            {
+                "summary": "本周记录较少。",
+                "diet_review": "饮食记录不足。",
+                "workout_review": "",
+                "problems": "晚餐油脂偏高",
+                "next_week_plan": None,
+            },
+            food_logs_count=2,
+            daily_logs_count=1,
+            has_workout_plan=False,
+        )
+
+        report = result["report"]
+        self.assertEqual(report["summary"], "本周记录较少。")
+        self.assertEqual(report["diet_review"], "饮食记录不足。")
+        self.assertIn("训练计划", report["workout_review"])
+        self.assertEqual(report["problems"], ["晚餐油脂偏高"])
+        self.assertGreaterEqual(len(report["next_week_plan"]), 1)
+        self.assertEqual(result["used_context"]["food_logs_count"], 2)
+        self.assertEqual(result["used_context"]["daily_logs_count"], 1)
+        self.assertFalse(result["used_context"]["has_workout_plan"])
+
+    def test_generate_week_report_returns_fallback_without_api_key(self):
+        original_key = settings.dashscope_api_key
+        settings.dashscope_api_key = ""
+        try:
+            result = asyncio.run(
+                AIService().generate_week_report(
+                    user_profile={},
+                    food_logs=[],
+                    daily_logs=[],
+                    latest_workout_plan=None,
+                )
+            )
+        finally:
+            settings.dashscope_api_key = original_key
+
+        self.assertIn("report", result)
+        self.assertIn("used_context", result)
+        self.assertIn("记录不足", result["report"]["summary"])
+        self.assertEqual(result["used_context"]["food_logs_count"], 0)
+        self.assertEqual(result["used_context"]["daily_logs_count"], 0)
+        self.assertFalse(result["used_context"]["has_workout_plan"])
+
 
 if __name__ == "__main__":
     unittest.main()
