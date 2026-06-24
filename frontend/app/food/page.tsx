@@ -1,29 +1,28 @@
 "use client";
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
+import Image from "next/image";
+import { Camera, CheckCircle2, Flame, ImagePlus, Loader2, MessageSquareText, Salad, Save, Sparkles, UploadCloud } from "lucide-react";
 import { apiFetch, API_BASE } from "@/lib/api";
 import { useCurrentUserId } from "@/lib/currentUser";
 import type { FoodAnalyzeResponse, FoodLog } from "@/types";
+import { FormField, PageHeader, Panel, PrimaryButton, StatusAlert, UserBadge, cn, textareaClass } from "@/components/ui";
 
 export default function FoodPage() {
   const [tab, setTab] = useState<"text" | "image">("text");
   const currentUserId = useCurrentUserId();
 
-  // text
   const [textInput, setTextInput] = useState("");
   const [textResult, setTextResult] = useState<FoodAnalyzeResponse | null>(null);
   const [textLoading, setTextLoading] = useState(false);
   const [textError, setTextError] = useState("");
 
-  // image
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageResult, setImageResult] = useState<FoodAnalyzeResponse | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState("");
 
-  // saved
   const [savedMsg, setSavedMsg] = useState("");
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleTextAnalyze() {
@@ -120,98 +119,156 @@ export default function FoodPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Food Analyzer</h1>
-        <span className="text-xs text-gray-400">user_id: {currentUserId ?? "未设置"}</span>
-      </div>
+      <PageHeader
+        eyebrow="Food analyzer"
+        title="饮食分析工作台"
+        description="用文字或图片快速估算热量和营养，确认后保存到你的饮食记录。"
+        action={<UserBadge userId={currentUserId} />}
+      />
 
       {!currentUserId && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-          请先到 <a href="/profile" className="underline font-medium">Profile</a> 建档。未设置当前用户时不会提交分析或保存记录。
-        </div>
+        <StatusAlert tone="amber">
+          请先到 <a href="/profile" className="font-bold underline">Profile</a> 建档。未设置当前用户时不会提交分析或保存记录。
+        </StatusAlert>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {(["text", "image"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === t ? "border-green-600 text-green-700" : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}>
-            {t === "text" ? "文字输入" : "图片上传"}
-          </button>
-        ))}
-      </div>
-
-      {tab === "text" && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-          <label className="block text-sm font-medium text-gray-700">输入今日饮食描述</label>
-          <textarea
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            placeholder="例：两个鸡蛋，一碗米饭，一杯牛奶"
-            rows={3}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-300"
-          />
-          <button onClick={handleTextAnalyze} disabled={textLoading || !textInput.trim() || !currentUserId}
-            className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
-            {textLoading ? "分析中…" : "开始分析"}
-          </button>
-          {textError && <p className="text-red-600 text-sm">{textError}</p>}
-        </div>
-      )}
-
-      {tab === "image" && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-          <label className="block text-sm font-medium text-gray-700">上传食物图片</label>
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-green-400 transition-colors">
-            {imagePreview ? (
-              <img src={imagePreview} alt="preview" className="max-h-48 mx-auto rounded-lg object-contain" />
-            ) : (
-              <p className="text-gray-400 text-sm">点击或拖拽图片到此处</p>
-            )}
-          </div>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-          <p className="text-xs text-gray-400">支持 jpg、png、webp，图片大小不超过 5MB。</p>
-          <button onClick={handleImageAnalyze} disabled={imageLoading || !imageFile || !currentUserId}
-            className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
-            {imageLoading ? "识别中…" : "识别食物"}
-          </button>
-          {imageError && <p className="text-red-600 text-sm">{imageError}</p>}
-        </div>
-      )}
-
-      {/* Results */}
-      {activeResult && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-          <h2 className="font-semibold text-gray-800">分析结果</h2>
-          <div className="space-y-2">
-            {activeResult.foods.map((food, i) => (
-              <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3 text-sm">
-                <span className="font-medium text-gray-800">{food.name} {food.estimated_weight && `(${food.estimated_weight})`}</span>
-                <span className="text-gray-500">{food.calories} kcal · 蛋白 {food.protein}g · 碳水 {food.carbs}g · 脂肪 {food.fat}g</span>
-              </div>
+      <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+        <Panel>
+          <div className="rounded-lg bg-slate-100 p-1">
+            {(["text", "image"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setTab(item)}
+                className={cn(
+                  "inline-flex w-1/2 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-black transition",
+                  tab === item ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-900",
+                )}
+              >
+                {item === "text" ? <MessageSquareText className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+                {item === "text" ? "文字输入" : "图片上传"}
+              </button>
             ))}
           </div>
-          <div className="flex items-center justify-between text-sm font-semibold text-gray-700 border-t border-gray-100 pt-3">
-            <span>总热量</span>
-            <span>{activeResult.total_calories} kcal</span>
-          </div>
-          <p className="text-xs text-gray-400 italic">{activeResult.suggestion}</p>
-          {tab === "image" && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              图片识别热量仅为估算，请确认份量后保存。
-            </p>
+
+          {tab === "text" && (
+            <div className="mt-5 space-y-4">
+              <FormField label="输入今日饮食描述" hint="写自然语言即可，例如：两个鸡蛋，一碗米饭，一杯牛奶。">
+                <textarea
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  placeholder="今天早餐吃了两个鸡蛋、一碗燕麦和一杯拿铁。"
+                  rows={7}
+                  className={textareaClass}
+                />
+              </FormField>
+              <div className="flex justify-end">
+                <PrimaryButton icon={textLoading ? Loader2 : Sparkles} onClick={handleTextAnalyze} disabled={textLoading || !textInput.trim() || !currentUserId}>
+                  {textLoading ? "分析中…" : "开始分析"}
+                </PrimaryButton>
+              </div>
+              {textError && <StatusAlert tone="red">{textError}</StatusAlert>}
+            </div>
           )}
-          <button onClick={() => handleSave(activeResult)} disabled={!currentUserId}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
-            确认并保存记录
-          </button>
-          {savedMsg && <p className="text-green-600 text-sm">{savedMsg}</p>}
-        </div>
-      )}
+
+          {tab === "image" && (
+            <div className="mt-5 space-y-4">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="group relative flex min-h-72 w-full items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-emerald-200 bg-emerald-50/50 p-6 text-center transition hover:border-emerald-400 hover:bg-emerald-50"
+              >
+                {imagePreview ? (
+                  <Image src={imagePreview} alt="preview" width={720} height={420} unoptimized className="max-h-72 w-auto rounded-lg object-contain shadow-sm" />
+                ) : (
+                  <div>
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-sm">
+                      <UploadCloud className="h-7 w-7" />
+                    </div>
+                    <p className="mt-4 text-sm font-bold text-slate-800">点击上传食物图片</p>
+                    <p className="mt-1 text-xs text-slate-500">支持 jpg、png、webp，大小不超过 5MB</p>
+                  </div>
+                )}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+              <div className="flex justify-end">
+                <PrimaryButton icon={imageLoading ? Loader2 : ImagePlus} onClick={handleImageAnalyze} disabled={imageLoading || !imageFile || !currentUserId}>
+                  {imageLoading ? "识别中…" : "识别食物"}
+                </PrimaryButton>
+              </div>
+              {imageError && <StatusAlert tone="red">{imageError}</StatusAlert>}
+            </div>
+          )}
+        </Panel>
+
+        <Panel className={cn(!activeResult && "flex min-h-[420px] items-center justify-center")}>
+          {!activeResult ? (
+            <div className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-cyan-50 text-cyan-600">
+                <Salad className="h-7 w-7" />
+              </div>
+              <h2 className="mt-4 text-xl font-black text-slate-950">等待分析结果</h2>
+              <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">完成文字或图片分析后，这里会展示食物明细、总热量和保存入口。</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-600">Result</p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">分析结果</h2>
+                </div>
+                <div className="rounded-lg bg-amber-50 px-4 py-3 text-right">
+                  <p className="text-xs font-bold text-amber-700">总热量</p>
+                  <p className="text-2xl font-black text-slate-950">{activeResult.total_calories} kcal</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                {activeResult.foods.map((food, index) => (
+                  <div key={`${food.name}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-base font-black text-slate-950">{food.name}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">{food.estimated_weight || "unknown"}</p>
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-bold text-amber-700 shadow-sm">
+                        <Flame className="h-3.5 w-3.5" /> {food.calories} kcal
+                      </span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-semibold text-slate-600">
+                      <Nutrient label="蛋白" value={`${food.protein}g`} />
+                      <Nutrient label="碳水" value={`${food.carbs}g`} />
+                      <Nutrient label="脂肪" value={`${food.fat}g`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <StatusAlert tone={tab === "image" ? "amber" : "blue"}>{activeResult.suggestion}</StatusAlert>
+              {tab === "image" && <p className="text-xs font-semibold text-amber-700">图片识别热量仅为估算，请确认份量后保存。</p>}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <PrimaryButton icon={Save} variant="blue" onClick={() => handleSave(activeResult)} disabled={!currentUserId}>
+                  确认并保存记录
+                </PrimaryButton>
+                {savedMsg && (
+                  <span className="inline-flex items-center gap-2 text-sm font-bold text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4" /> {savedMsg.replace("✓ ", "")}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function Nutrient({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-white px-3 py-2">
+      <p className="text-slate-400">{label}</p>
+      <p className="mt-1 text-slate-900">{value}</p>
     </div>
   );
 }

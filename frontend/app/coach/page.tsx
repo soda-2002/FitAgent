@@ -1,8 +1,10 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Bot, Brain, CheckCircle2, Dumbbell, Loader2, MessageCircle, Send, Sparkles, Utensils } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useCurrentUserId } from "@/lib/currentUser";
 import type { AgentChatResponse, WeekReportResponse } from "@/types";
+import { PageHeader, Panel, PrimaryButton, StatusAlert, UserBadge, cn, inputClass } from "@/components/ui";
 
 interface Message {
   role: "user" | "assistant";
@@ -12,7 +14,7 @@ interface Message {
 export default function CoachPage() {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "你好！我是你的 AI 减脂教练 FitAgent。你可以问我饮食建议、训练计划或者本周进展，我会结合你的记录给出建议。" },
+    { role: "assistant", content: "你好，我是 FitAgent。你可以问我饮食建议、训练计划或本周进展，我会结合你的记录给出建议。" },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -72,100 +74,163 @@ export default function CoachPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-800">AI Coach</h1>
-        <span className="text-xs text-gray-400">user_id: {currentUserId ?? "未设置"}</span>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="AI Coach"
+        title="私人减脂教练"
+        description="生成周总结，或者直接和 FitAgent 讨论今天的饮食、训练和下一步调整。"
+        action={<UserBadge userId={currentUserId} />}
+      />
+
       {!currentUserId && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-3">
-          请先到 <a href="/profile" className="underline font-medium">Profile</a> 建档，再使用 AI Coach。
-        </div>
+        <StatusAlert tone="amber">
+          请先到 <a href="/profile" className="font-bold underline">Profile</a> 建档，再使用 AI Coach。
+        </StatusAlert>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-3 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-semibold text-gray-800 text-sm">本周总结报告</h2>
-            <p className="text-xs text-gray-400 mt-1">基于最近 7 天饮食、每日打卡和最新训练计划生成。</p>
-          </div>
-          <button
-            onClick={handleWeekReport}
-            disabled={reportLoading || !currentUserId}
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors"
-          >
-            {reportLoading ? "生成中…" : "生成本周总结"}
-          </button>
-        </div>
-        {reportError && <p className="text-red-600 text-sm">{reportError}</p>}
-        {weekReport && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <ReportBlock title="本周总评" text={weekReport.report.summary} />
-            <ReportBlock title="饮食回顾" text={weekReport.report.diet_review} />
-            <ReportBlock title="训练回顾" text={weekReport.report.workout_review} />
-            <div className="border border-gray-100 rounded-lg p-3">
-              <p className="font-medium text-gray-700 mb-2">主要问题</p>
-              <ul className="list-disc list-inside text-gray-600 space-y-1">
-                {weekReport.report.problems.map((item, index) => <li key={index}>{item}</li>)}
-              </ul>
+      <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+        <Panel className="self-start">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
+                <Brain className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">本周总结报告</h2>
+                <p className="text-sm text-slate-500">基于最近 7 天饮食、打卡和最新训练计划。</p>
+              </div>
             </div>
-            <div className="border border-gray-100 rounded-lg p-3 sm:col-span-2">
-              <p className="font-medium text-gray-700 mb-2">下周建议</p>
-              <ul className="list-disc list-inside text-gray-600 space-y-1">
-                {weekReport.report.next_week_plan.map((item, index) => <li key={index}>{item}</li>)}
-              </ul>
-              <p className="text-xs text-gray-400 mt-2">
-                已使用：饮食 {weekReport.used_context.food_logs_count} 条 · 打卡 {weekReport.used_context.daily_logs_count} 条 · 训练计划 {weekReport.used_context.has_workout_plan ? "有" : "无"}
-              </p>
-            </div>
+            <PrimaryButton variant="blue" icon={reportLoading ? Loader2 : Sparkles} onClick={handleWeekReport} disabled={reportLoading || !currentUserId}>
+              {reportLoading ? "生成中…" : "生成周总结"}
+            </PrimaryButton>
           </div>
-        )}
-      </div>
 
-      <div className="flex-1 overflow-y-auto bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${
-              msg.role === "user"
-                ? "bg-green-600 text-white"
-                : "bg-gray-100 text-gray-800"
-            }`}>
-              {msg.content}
+          {reportError && <div className="mt-4"><StatusAlert tone="red">{reportError}</StatusAlert></div>}
+
+          {!weekReport ? (
+            <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+              <Sparkles className="mx-auto h-9 w-9 text-blue-500" />
+              <p className="mt-3 text-sm font-bold text-slate-700">点击按钮生成本周复盘</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">记录不足时也会返回初步建议。</p>
+            </div>
+          ) : (
+            <div className="mt-5 space-y-3">
+              <ReportBlock title="本周总评" text={weekReport.report.summary} tone="blue" />
+              <ReportBlock title="饮食回顾" text={weekReport.report.diet_review} tone="emerald" />
+              <ReportBlock title="训练回顾" text={weekReport.report.workout_review} tone="amber" />
+              <ReportList title="主要问题" items={weekReport.report.problems} />
+              <ReportList title="下周建议" items={weekReport.report.next_week_plan} />
+              <div className="flex flex-wrap gap-2 pt-2 text-xs font-bold text-slate-500">
+                <ContextBadge icon={Utensils} text={`饮食 ${weekReport.used_context.food_logs_count} 条`} />
+                <ContextBadge icon={CheckCircle2} text={`打卡 ${weekReport.used_context.daily_logs_count} 条`} />
+                <ContextBadge icon={Dumbbell} text={`训练计划 ${weekReport.used_context.has_workout_plan ? "有" : "无"}`} />
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel className="flex min-h-[620px] flex-col p-0">
+          <div className="border-b border-slate-100 p-5">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-emerald-50 p-2 text-emerald-600">
+                <MessageCircle className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">Coach Chat</h2>
+                <p className="text-sm text-slate-500">按 Enter 发送，Shift + Enter 换行。</p>
+              </div>
             </div>
           </div>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-100 text-gray-500 rounded-xl px-4 py-2.5 text-sm">思考中…</div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
 
-      <div className="mt-3 flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={currentUserId ? "问我任何关于减脂、饮食或训练的问题…" : "请先到 Profile 建档"}
-          className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-        />
-        <button onClick={handleSend} disabled={loading || !input.trim() || !currentUserId}
-          className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors">
-          发送
-        </button>
+          <div className="flex-1 overflow-y-auto bg-slate-50/70 p-5">
+            <div className="space-y-4">
+              {messages.map((msg, index) => (
+                <div key={index} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+                  <div
+                    className={cn(
+                      "max-w-[82%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm",
+                      msg.role === "user"
+                        ? "bg-emerald-600 text-white"
+                        : "border border-slate-100 bg-white text-slate-800",
+                    )}
+                  >
+                    {msg.role === "assistant" && (
+                      <span className="mb-1 flex items-center gap-1.5 text-xs font-bold text-emerald-600">
+                        <Bot className="h-3.5 w-3.5" /> FitAgent
+                      </span>
+                    )}
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="inline-flex items-center gap-2 rounded-lg border border-slate-100 bg-white px-4 py-3 text-sm font-semibold text-slate-500 shadow-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" /> 思考中…
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 bg-white p-4">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={currentUserId ? "问我任何关于减脂、饮食或训练的问题…" : "请先到 Profile 建档"}
+                className={inputClass}
+              />
+              <PrimaryButton icon={Send} onClick={handleSend} disabled={loading || !input.trim() || !currentUserId}>
+                发送
+              </PrimaryButton>
+            </div>
+            <p className="mt-2 text-center text-xs text-slate-400">FitAgent 建议仅用于减脂管理 Demo，不构成医疗建议。</p>
+          </div>
+        </Panel>
       </div>
-      <p className="text-xs text-gray-400 mt-1 text-center">FitAgent 建议仅用于减脂管理 Demo，不构成医疗建议。</p>
     </div>
   );
 }
 
-function ReportBlock({ title, text }: { title: string; text: string }) {
+function ReportBlock({ title, text, tone }: { title: string; text: string; tone: "blue" | "emerald" | "amber" }) {
+  const tones = {
+    blue: "border-blue-100 bg-blue-50",
+    emerald: "border-emerald-100 bg-emerald-50",
+    amber: "border-amber-100 bg-amber-50",
+  };
   return (
-    <div className="border border-gray-100 rounded-lg p-3">
-      <p className="font-medium text-gray-700 mb-2">{title}</p>
-      <p className="text-gray-600">{text}</p>
+    <div className={cn("rounded-lg border p-4", tones[tone])}>
+      <p className="text-sm font-black text-slate-900">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-700">{text}</p>
     </div>
+  );
+}
+
+function ReportList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-lg border border-slate-100 bg-white p-4">
+      <p className="text-sm font-black text-slate-900">{title}</p>
+      <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+        {items.map((item, index) => (
+          <li key={index} className="flex gap-2">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ContextBadge({ icon: Icon, text }: { icon: typeof Utensils; text: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
+      <Icon className="h-3.5 w-3.5" />
+      {text}
+    </span>
   );
 }
