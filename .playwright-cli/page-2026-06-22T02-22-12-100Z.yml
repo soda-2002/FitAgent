@@ -1,0 +1,35 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: FitAgent
+      - link "Dashboard" [ref=e5] [cursor=pointer]:
+        - /url: /
+      - link "Profile" [ref=e6] [cursor=pointer]:
+        - /url: /profile
+      - link "Food" [ref=e7] [cursor=pointer]:
+        - /url: /food
+      - link "Meal Planner" [ref=e8] [cursor=pointer]:
+        - /url: /meal
+      - link "Workout" [ref=e9] [cursor=pointer]:
+        - /url: /workout
+      - link "AI Coach" [ref=e10] [cursor=pointer]:
+        - /url: /coach
+  - main [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - heading "Meal Planner" [level=1] [ref=e14]
+        - generic [ref=e15]: "user_id: 未设置"
+      - generic [ref=e16]:
+        - text: 请先到
+        - link "Profile" [ref=e17] [cursor=pointer]:
+          - /url: /profile
+        - text: 建档，再生成减脂餐推荐。
+      - generic [ref=e18]:
+        - generic [ref=e19]: 输入现有食材
+        - textbox "例：鸡胸肉、鸡蛋、西红柿、米饭" [ref=e20]
+        - generic [ref=e21]: 饮食偏好
+        - textbox "例：高蛋白、低脂" [ref=e22]: 高蛋白、低脂
+        - button "推荐减脂餐" [disabled] [ref=e23]
+  - button "Open Next.js Dev Tools" [ref=e29] [cursor=pointer]:
+    - img [ref=e30]
+  - alert [ref=e33]

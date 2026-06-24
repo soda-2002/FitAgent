@@ -1,0 +1,21 @@
+# env
+.env
+.env.local
+backend/.env
+frontend/.env.local
+
+# python
+backend/.venv/
+__pycache__/
+*.pyc
+
+# node
+frontend/node_modules/
+frontend/.next/
+
+# database / uploads
+backend/fitagent.db
+backend/uploads/
+
+# system
+.DS_Store
